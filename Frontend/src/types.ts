@@ -27,3 +27,14 @@ export type PublicDocDTO = {
   content: string;
   updatedAt: string;
 };
+
+export type UploadDTO = {
+  _id: string;
+  originalName: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  url: string;
+  createdAt: string;
+  updatedAt: string;
+};
