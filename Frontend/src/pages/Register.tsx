@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { useTranslation } from "react-i18next";
 
 export default function Register() {
+  const { t } = useTranslation();
   const { register } = useAuth();
   const navigate = useNavigate();
 
@@ -28,19 +30,19 @@ export default function Register() {
 
   return (
     <div style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
-      <h2>Register</h2>
+      <h2>{t("auth.registerTitle")}</h2>
 
       {error && <div style={{ marginBottom: 12, color: "crimson" }}>{error}</div>}
 
       <form onSubmit={onSubmit} style={{ display: "grid", gap: 10 }}>
         <input
-          placeholder="Email"
+          placeholder={t("auth.email")}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           autoComplete="email"
         />
         <input
-          placeholder="Password (min 6 chars)"
+          placeholder={t("auth.password")}
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -48,12 +50,12 @@ export default function Register() {
         />
 
         <button disabled={busy} type="submit">
-          {busy ? "Creating..." : "Create account"}
+          {busy ? t("auth.creating") : t("auth.createAccount")}
         </button>
       </form>
 
       <p style={{ marginTop: 12 }}>
-        Already have an account? <Link to="/login">Login</Link>
+        {t("auth.haveAccount")} <Link to="/login">{t("auth.loginLink")}</Link>
       </p>
     </div>
   );
