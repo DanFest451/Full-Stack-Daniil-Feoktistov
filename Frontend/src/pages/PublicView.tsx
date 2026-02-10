@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api } from "../api/http";
 import type { PublicDocDTO } from "../types";
+import { useTranslation } from "react-i18next";
 
 export default function PublicView() {
+  const { t } = useTranslation();
+
   const params = useParams<{ token: string }>();
   const token = params.token;
 
@@ -12,7 +15,7 @@ export default function PublicView() {
 
   useEffect(() => {
     if (!token) {
-      setError("Missing public token in URL.");
+      setError(t("public.missingToken"));
       return;
     }
 
@@ -25,33 +28,26 @@ export default function PublicView() {
         setError(message);
       }
     })();
-  }, [token]);
+  }, [token, t]);
 
   return (
     <div style={{ maxWidth: 900, margin: "20px auto", padding: 16 }}>
       <div style={{ marginBottom: 12 }}>
-        <Link to="/login">Login</Link>
+        <Link to="/login">{t("public.login")}</Link>
       </div>
 
       {error && <div style={{ color: "crimson" }}>{error}</div>}
 
       {!data ? (
-        <div>Loading...</div>
+        <div>{t("public.loading")}</div>
       ) : (
         <>
           <h2>{data.title}</h2>
-          <div
-            style={{
-              whiteSpace: "pre-wrap",
-              border: "1px solid #ddd",
-              padding: 12,
-              borderRadius: 8,
-            }}
-          >
+          <div style={{ whiteSpace: "pre-wrap", border: "1px solid #ddd", padding: 12, borderRadius: 8 }}>
             {data.content}
           </div>
           <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
-            Updated: {new Date(data.updatedAt).toLocaleString()}
+            {t("public.updated")}: {new Date(data.updatedAt).toLocaleString()}
           </div>
         </>
       )}
