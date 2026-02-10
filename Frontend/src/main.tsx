@@ -5,6 +5,7 @@ import { AuthProvider } from "./auth/AuthContext";
 import App from "./App";
 import "./style.css";
 import { initTheme } from "./utils/theme";
+import "./i18n";
 
 initTheme();
 
