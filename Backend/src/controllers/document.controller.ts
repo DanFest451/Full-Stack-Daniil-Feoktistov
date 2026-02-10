@@ -5,7 +5,7 @@ import User from "../models/User";
 import type { AuthRequest } from "../middleware/auth.middleware";
 import mongoose from "mongoose";
 
-const LOCK_TTL_MS = 60 * 1000;
+const LOCK_TTL_MS = 60 * 1000; // 60 seconds
 
 function lockIsActive(doc: IDocument): boolean {
   return !!(doc.lockedBy && doc.lockExpiresAt && doc.lockExpiresAt.getTime() > Date.now());
@@ -17,13 +17,14 @@ function hasAccess(doc: IDocument, userId: string): boolean {
   return isOwner || isEditor;
 }
 
+// Get all documents for logged-in user
 export async function getMyDocuments(req: AuthRequest, res: Response) {
   try {
     if (!req.userId) return res.status(401).json({ message: "Unauthorized." });
 
     const docs = await DocumentModel.find({
       owner: req.userId,
-      deletedAt: null,
+      deletedAt: null, // Hide trashed documents
     }).sort({ updatedAt: -1 });
 
     return res.json(docs);
@@ -32,6 +33,7 @@ export async function getMyDocuments(req: AuthRequest, res: Response) {
   }
 }
 
+// Create a document
 export async function createDocument(
   req: AuthRequest,
   res: Response
@@ -55,6 +57,7 @@ export async function createDocument(
   }
 }
 
+// Update a document
 export async function updateDocument(req: AuthRequest, res: Response) {
   try {
     if (!req.userId) return res.status(401).json({ message: "Unauthorized." });
@@ -87,6 +90,7 @@ export async function updateDocument(req: AuthRequest, res: Response) {
   }
 }
 
+// Delete a document
 export async function deleteDocument(req: AuthRequest, res: Response) {
   try {
     if (!req.userId) return res.status(401).json({ message: "Unauthorized." });
@@ -98,6 +102,7 @@ export async function deleteDocument(req: AuthRequest, res: Response) {
       return res.status(404).json({ message: "Document not found." });
     }
 
+    // Soft delete (recycle bin)
     doc.deletedAt = new Date();
     doc.viewPublic = false;
     doc.publicToken = null;
@@ -111,6 +116,7 @@ export async function deleteDocument(req: AuthRequest, res: Response) {
   }
 }
 
+// Only for owner: add an editor by email
 export async function addEditorByEmail(req: AuthRequest, res: Response) {
   try {
     if (!req.userId) return res.status(401).json({ message: "Unauthorized." });
@@ -141,6 +147,7 @@ export async function addEditorByEmail(req: AuthRequest, res: Response) {
   }
 }
 
+// Only for owner: remove an editor by email
 export async function removeEditorByEmail(req: AuthRequest, res: Response) {
   try {
     if (!req.userId) return res.status(401).json({ message: "Unauthorized." });
@@ -166,6 +173,7 @@ export async function removeEditorByEmail(req: AuthRequest, res: Response) {
   }
 }
 
+// For owner only: enable public view link
 export async function enablePublicLink(req: AuthRequest, res: Response) {
   try {
     if (!req.userId) return res.status(401).json({ message: "Unauthorized." });
@@ -192,6 +200,7 @@ export async function enablePublicLink(req: AuthRequest, res: Response) {
   }
 }
 
+// Public (doesn't require auth): view document by token
 export async function getPublicDocument(req: Request, res: Response) {
   try {
     const { token } = req.params as { token: string };
@@ -203,7 +212,7 @@ export async function getPublicDocument(req: Request, res: Response) {
     });
 
     if (!doc) return res.status(404).json({ message: "Public document not found." });
-
+    // return read-only fields
     return res.json({
       title: doc.title,
       content: doc.content,
@@ -214,6 +223,7 @@ export async function getPublicDocument(req: Request, res: Response) {
   }
 }
 
+// Acquire lock (owner/editor)
 export async function acquireLock(req: AuthRequest, res: Response) {
   try {
     if (!req.userId) return res.status(401).json({ message: "Unauthorized." });
@@ -249,6 +259,7 @@ export async function acquireLock(req: AuthRequest, res: Response) {
   }
 }
 
+// Renew lock
 export async function renewLock(req: AuthRequest, res: Response) {
   try {
     if (!req.userId) return res.status(401).json({ message: "Unauthorized." });
@@ -271,6 +282,40 @@ export async function renewLock(req: AuthRequest, res: Response) {
   }
 }
 
+// Create a clone of a document
+export async function cloneDocument(req: AuthRequest, res: Response) {
+  try {
+    if (!req.userId) return res.status(401).json({ message: "Unauthorized." });
+
+    const { id } = req.params as { id: string };
+
+    const doc = await DocumentModel.findById(id);
+    if (!doc || doc.deletedAt) return res.status(404).json({ message: "Document not found." });
+
+    if (!hasAccess(doc, req.userId)) {
+      return res.status(403).json({ message: "No access to clone this document." });
+    }
+
+    const cloned = await DocumentModel.create({
+      title: `${doc.title} (copy)`,
+      content: doc.content || "",
+      owner: new mongoose.Types.ObjectId(req.userId), // cloner becomes owner (safest)
+      editors: [],
+      viewPublic: false,
+      publicToken: null,
+      lockedBy: null,
+      lockExpiresAt: null,
+      deletedAt: null,
+    });
+
+    return res.status(201).json(cloned);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return res.status(500).json({ message: "Failed to clone document.", error: message });
+  }
+}
+
+// Release lock when leaving editor
 export async function releaseLock(req: AuthRequest, res: Response) {
   try {
     if (!req.userId) return res.status(401).json({ message: "Unauthorized." });
@@ -291,5 +336,77 @@ export async function releaseLock(req: AuthRequest, res: Response) {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return res.status(500).json({ message: "Failed to release lock.", error: message });
+  }
+}
+
+// List trashed documents
+export async function getTrash(req: AuthRequest, res: Response) {
+  try {
+    if (!req.userId) return res.status(401).json({ message: "Unauthorized." });
+
+    const docs = await DocumentModel.find({
+      owner: req.userId,
+      deletedAt: { $ne: null },
+    }).sort({ deletedAt: -1 });
+
+    return res.json(docs);
+  } catch {
+    return res.status(500).json({ message: "Failed to fetch recycle bin." });
+  }
+}
+
+// Restore from trash
+export async function restoreDocument(req: AuthRequest, res: Response) {
+  try {
+    if (!req.userId) return res.status(401).json({ message: "Unauthorized." });
+
+    const { id } = req.params as { id: string };
+
+    const doc = await DocumentModel.findOne({ _id: id, owner: req.userId });
+    if (!doc) return res.status(404).json({ message: "Document not found." });
+
+    doc.deletedAt = null;
+    await doc.save();
+
+    return res.json({ message: "Document restored." });
+  } catch {
+    return res.status(500).json({ message: "Failed to restore document." });
+  }
+}
+
+// Permanently delete
+export async function deleteForever(req: AuthRequest, res: Response) {
+  try {
+    if (!req.userId) return res.status(401).json({ message: "Unauthorized." });
+
+    const { id } = req.params as { id: string };
+
+    const doc = await DocumentModel.findOneAndDelete({
+      _id: id,
+      owner: req.userId,
+      deletedAt: { $ne: null },
+    });
+
+    if (!doc) return res.status(404).json({ message: "Document not found in recycle bin." });
+
+    return res.json({ message: "Document permanently deleted." });
+  } catch {
+    return res.status(500).json({ message: "Failed to permanently delete document." });
+  }
+}
+
+// Empty trash
+export async function emptyTrash(req: AuthRequest, res: Response) {
+  try {
+    if (!req.userId) return res.status(401).json({ message: "Unauthorized." });
+
+    const result = await DocumentModel.deleteMany({
+      owner: req.userId,
+      deletedAt: { $ne: null },
+    });
+
+    return res.json({ message: "Recycle bin emptied.", deletedCount: result.deletedCount });
+  } catch {
+    return res.status(500).json({ message: "Failed to empty recycle bin." });
   }
 }
